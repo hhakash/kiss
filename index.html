@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pixel Kisses 💋</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -16,7 +17,7 @@
 
         body {
             font-family: 'VT323', monospace;
-            background-color: var(--pastel-pink);
+            background-color: #fff5f7;
             background-image: 
                 linear-gradient(45deg, #ffffff 25%, transparent 25%), 
                 linear-gradient(-45deg, #ffffff 25%, transparent 25%), 
@@ -24,7 +25,6 @@
                 linear-gradient(-45deg, transparent 75%, #ffffff 75%);
             background-size: 40px 40px;
             background-position: 0 0, 0 20px, 20px 20px, 20px 0;
-            background-color: #fff5f7;
             overflow-x: hidden;
         }
 
@@ -52,13 +52,13 @@
             position: fixed;
             pointer-events: none;
             z-index: 100;
-            font-size: 2rem;
+            font-size: 3rem;
             animation: flyUp 2s forwards ease-out;
         }
 
         @keyframes flyUp {
             0% { transform: translateY(0) scale(1); opacity: 1; }
-            100% { transform: translateY(-200px) scale(2); opacity: 0; }
+            100% { transform: translateY(-300px) scale(2) rotate(20deg); opacity: 0; }
         }
 
         .floating {
@@ -76,208 +76,150 @@
             display: inline-block;
             background: var(--pastel-blue);
         }
+
+        #messages::-webkit-scrollbar { width: 4px; }
+        #messages::-webkit-scrollbar-thumb { background: #333; }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
     <div id="app" class="max-w-md w-full">
-        <div id="loading" class="pixel-card p-8 text-center">
-            <h1 class="text-4xl mb-4">Loading Love...</h1>
-            <div id="loading-heart" class="text-2xl animate-pulse">💋💋💋</div>
-            <p id="error-display" class="text-red-500 mt-4 hidden"></p>
+        <!-- Configuration View (Hidden after key is saved) -->
+        <div id="config-view" class="pixel-card p-8 text-center">
+            <h1 class="text-4xl mb-4">Setup Love Link</h1>
+            <p class="mb-4">Enter your Ably API Key to start</p>
+            <input type="password" id="api-key-input" placeholder="Paste Ably Key Here" class="w-full border-2 border-black p-2 mb-4 text-center font-sans">
+            <button onclick="saveConfig()" class="pixel-btn w-full py-2 text-xl text-white">Save & Start</button>
+            <p class="text-xs mt-4 opacity-50 italic">Key is stored only on your device.</p>
         </div>
 
+        <!-- Selection View -->
         <div id="setup-view" class="hidden pixel-card p-8 text-center">
             <h1 class="text-4xl mb-6">Who are you?</h1>
-            <button onclick="switchUser('hha')" class="pixel-btn w-full py-3 mb-4 text-2xl text-white">I am HHA</button>
-            <button onclick="switchUser('ppita')" class="pixel-btn w-full py-3 text-2xl text-white bg-purple-400">I am Ppita</button>
+            <button onclick="initApp('hha')" class="pixel-btn w-full py-3 mb-4 text-2xl text-white">I am HHA</button>
+            <button onclick="initApp('ppita')" class="pixel-btn w-full py-3 text-2xl text-white bg-purple-400">I am Ppita</button>
         </div>
 
+        <!-- Main Interaction View -->
         <div id="main-view" class="hidden">
             <div class="pixel-card p-6 text-center bg-white">
                 <div class="flex justify-between items-center mb-6">
                     <span id="user-tag" class="status-pill text-xl font-bold uppercase"></span>
-                    <span id="connection-status" class="status-pill text-xl bg-green-200">Online</span>
+                    <span id="connection-status" class="status-pill text-xl bg-yellow-200">Connecting...</span>
                 </div>
 
                 <div class="mb-8 floating">
                     <div id="pixel-heart" class="text-8xl mb-4">❤️</div>
-                    <h2 id="greeting" class="text-3xl font-bold">Waiting for a kiss...</h2>
+                    <h2 id="greeting" class="text-3xl font-bold">Waiting for love...</h2>
                 </div>
 
                 <div id="interaction-area">
                     <button id="send-kiss-btn" class="pixel-btn w-full py-4 text-3xl text-white mb-4">
                         SEND KISS! 💋
                     </button>
-                    <p class="text-lg opacity-60">Click to send a vibration & notification</p>
                 </div>
 
                 <div id="history-box" class="mt-8 border-t-2 border-dashed border-gray-300 pt-4">
-                    <h3 class="text-xl mb-2">Love History</h3>
-                    <div id="messages" class="text-lg space-y-1 h-32 overflow-y-auto"></div>
+                    <h3 class="text-xl mb-2">Love Log</h3>
+                    <div id="messages" class="text-lg space-y-1 h-32 overflow-y-auto text-left px-2"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query, limit, updateDoc, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <script>
+        let ably, channel, userId, partnerId;
 
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'kiss-day-app';
-
-        let currentUser = null;
-        let partnerId = '';
-        let userId = '';
-        let unsubscribe = null;
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const userParam = urlParams.get('user');
-
-        async function init() {
-            try {
-                // RULE 3: Auth Before Queries - await the sign in
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    currentUser = (await signInWithCustomToken(auth, __initial_auth_token)).user;
-                } else {
-                    currentUser = (await signInAnonymously(auth)).user;
-                }
-                
-                // Once auth is successful, handle the UI view
-                if (userParam === 'hha' || userParam === 'ppita') {
-                    setupApp(userParam);
-                } else {
-                    showSetupScreen();
-                }
-
-            } catch (err) {
-                console.error("Auth failed:", err);
-                document.getElementById('error-display').innerText = "Connection error. Please refresh.";
-                document.getElementById('error-display').classList.remove('hidden');
-                document.getElementById('loading-heart').innerText = "💔";
+        // Check if API key exists in localStorage
+        window.onload = () => {
+            const savedKey = localStorage.getItem('ably_kiss_key');
+            if (savedKey) {
+                document.getElementById('config-view').classList.add('hidden');
+                checkUrlParams();
             }
-            
-            // Still listen for state changes to be safe
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    currentUser = user;
-                }
-            });
-        }
-
-        function showSetupScreen() {
-            document.getElementById('loading').classList.add('hidden');
-            document.getElementById('setup-view').classList.remove('hidden');
-            document.getElementById('main-view').classList.add('hidden');
-        }
-
-        window.switchUser = (u) => {
-            setupApp(u);
         };
 
-        function setupApp(selectedUser) {
-            userId = selectedUser;
+        function saveConfig() {
+            const key = document.getElementById('api-key-input').value.trim();
+            if (key) {
+                localStorage.setItem('ably_kiss_key', key);
+                location.reload();
+            }
+        }
+
+        function checkUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            const user = params.get('user');
+            if (user === 'hha' || user === 'ppita') {
+                initApp(user);
+            } else {
+                document.getElementById('setup-view').classList.remove('hidden');
+            }
+        }
+
+        function initApp(role) {
+            userId = role;
             partnerId = (userId === 'hha') ? 'ppita' : 'hha';
-            
-            document.getElementById('loading').classList.add('hidden');
+
+            // UI Transitions
             document.getElementById('setup-view').classList.add('hidden');
             document.getElementById('main-view').classList.remove('hidden');
             document.getElementById('user-tag').innerText = userId;
-            
-            requestNotificationPermission();
-            listenForKisses();
+
+            // Initialize Ably
+            const key = localStorage.getItem('ably_kiss_key');
+            ably = new Ably.Realtime(key);
+            channel = ably.channels.get('kiss-day-channel');
+
+            ably.connection.on('connected', () => {
+                document.getElementById('connection-status').innerText = "Online";
+                document.getElementById('connection-status').classList.replace('bg-yellow-200', 'bg-green-200');
+            });
+
+            // Listen for Kisses
+            channel.subscribe('kiss', (message) => {
+                if (message.data.to === userId) {
+                    handleIncomingKiss(message.data);
+                }
+            });
+
+            // Request Notification Permission
+            if ("Notification" in window) Notification.requestPermission();
         }
 
-        function requestNotificationPermission() {
-            if ("Notification" in window && Notification.permission === "default") {
-                Notification.requestPermission();
-            }
-        }
+        document.getElementById('send-kiss-btn').onclick = () => {
+            if (!channel) return;
 
-        document.getElementById('send-kiss-btn').onclick = async () => {
-            if (!currentUser) {
-                addLog("Wait for connection...");
-                return;
-            }
+            const data = { from: userId, to: partnerId, time: Date.now() };
+            channel.publish('kiss', data);
             
-            // RULE 1: Strict Paths
-            const kissRef = collection(db, 'artifacts', appId, 'public', 'data', 'kisses');
-            const kissData = {
-                from: userId,
-                to: partnerId,
-                timestamp: serverTimestamp(),
-                type: 'initial'
-            };
-
             spawnKissEffect();
-            
-            try {
-                await addDoc(kissRef, kissData);
-                addLog(`You sent a kiss to ${partnerId}!`);
-            } catch (e) {
-                console.error("Error sending kiss", e);
-                addLog("Failed to send. Try again?");
-            }
+            addLog(`Sent a kiss to ${partnerId}!`);
         };
 
-        function listenForKisses() {
-            if (unsubscribe) unsubscribe();
-            
-            // RULE 1: Strict Paths
-            const q = collection(db, 'artifacts', appId, 'public', 'data', 'kisses');
-            
-            // RULE 2: No Complex Queries - Fetch and filter in memory
-            unsubscribe = onSnapshot(q, (snapshot) => {
-                snapshot.docChanges().forEach((change) => {
-                    if (change.type === "added") {
-                        const data = change.doc.data();
-                        const time = data.timestamp?.toMillis() || Date.now();
-                        
-                        // Only react to fresh kisses
-                        if (Date.now() - time > 15000) return; 
-
-                        if (data.to === userId) {
-                            handleIncomingKiss(data);
-                        }
-                    }
-                });
-            }, (error) => {
-                console.error("Firestore error:", error);
-                // If it's a permission error, it's often because the user isn't authed yet
-            });
-        }
-
         function handleIncomingKiss(data) {
+            // Vibrate
             if ("vibrate" in navigator) {
                 navigator.vibrate([300, 100, 300, 100, 500]);
             }
 
-            document.getElementById('greeting').innerText = `${data.from} sent you a kiss!`;
+            // UI Feedback
             document.getElementById('pixel-heart').innerText = "😘";
-            addLog(`${data.from} kissed you! 💖`);
+            document.getElementById('greeting').innerText = `${data.from} kissed you!`;
+            addLog(`${data.from} sent a kissy! 💖`);
 
+            // Notifications
             if (document.visibilityState !== 'visible') {
-                showLocalNotification(data.from);
-            }
-
-            setTimeout(() => {
-                document.getElementById('greeting').innerText = "Kiss back? ✨";
-                document.getElementById('pixel-heart').innerText = "❤️";
-            }, 6000);
-        }
-
-        function showLocalNotification(sender) {
-            if (Notification.permission === "granted") {
-                new Notification("💋 Kiss Received!", {
-                    body: `${sender} just kissed you! Open to kiss back.`,
+                new Notification("💋 Kiss Day!", {
+                    body: `${data.from} just sent you a kiss! Tap to return it.`,
                     icon: "https://img.icons8.com/pixel-styled/96/filled-like.png"
                 });
             }
+
+            setTimeout(() => {
+                document.getElementById('pixel-heart').innerText = "❤️";
+                document.getElementById('greeting').innerText = "Send one back? ✨";
+            }, 5000);
         }
 
         function spawnKissEffect() {
@@ -293,14 +235,10 @@
         function addLog(msg) {
             const box = document.getElementById('messages');
             const div = document.createElement('div');
-            div.className = "border-b border-pink-100 py-2 animate-bounce";
-            div.innerText = `> ${msg}`;
+            div.className = "border-b border-pink-100 py-1 text-sm";
+            div.innerText = `[${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}] > ${msg}`;
             box.prepend(div);
-            setTimeout(() => div.classList.remove('animate-bounce'), 1000);
         }
-
-        // Start the app
-        window.onload = init;
     </script>
 </body>
 </html>
