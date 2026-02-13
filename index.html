@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pixel Kisses 💋</title>
+    <title>Happy Kiss Day 💋</title>
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlBpeGVsIEtpc3NlcyIsCiAgInNob3J0X25hbWUiIjogIktpc3NlcyIsCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjZmZlNmVhIiwKICAidGhlbWVfY29sb3IiOiAiI2ZmODVhMiIKfQ==">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
@@ -11,27 +12,22 @@
         :root {
             --pastel-pink: #ffd1dc;
             --pastel-purple: #e0bbe4;
-            --pastel-blue: #b2cefe;
-            --deep-pink: #ffb7c5;
             --pixel-border: 4px;
         }
 
         body {
             font-family: 'VT323', monospace;
             background-color: #ffe6ea;
-            /* Small Hearts Background Pattern */
             background-image: url("data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' fill='%23ffb7c5' fill-opacity='0.4'/%3E%3C/svg%3E");
             background-size: 32px 32px;
-            overflow-x: hidden;
-            /* Prevents bounce scroll on iOS */
+            overflow: hidden;
             position: fixed;
             width: 100%;
             height: 100%;
         }
 
         #app-container {
-            height: 100dvh; /* Dynamic viewport height for mobile browsers */
-            overflow-y: auto;
+            height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -42,7 +38,6 @@
             background: white;
             border: var(--pixel-border) solid #333;
             box-shadow: 6px 6px 0px rgba(0,0,0,0.15);
-            image-rendering: pixelated;
             width: 100%;
         }
 
@@ -74,81 +69,57 @@
             100% { transform: translateY(-350px) scale(2.5) rotate(20deg); opacity: 0; }
         }
 
-        .floating {
-            animation: floating 3s ease-in-out infinite;
-        }
-
-        @keyframes floating {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-15px); }
-        }
+        .floating { animation: floating 3s ease-in-out infinite; }
+        @keyframes floating { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
 
         .status-pill {
             border: 2px solid #333;
             padding: 2px 12px;
-            display: inline-block;
-            background: var(--pastel-blue);
+            background: #b2cefe;
             font-size: 1.25rem;
-        }
-
-        #messages {
-            background: #fffafa;
-            border: 2px solid #eee;
-        }
-
-        #messages::-webkit-scrollbar { width: 4px; }
-        #messages::-webkit-scrollbar-thumb { background: #333; }
-
-        /* Mobile specific font scaling */
-        @media (max-width: 380px) {
-            .text-8xl { font-size: 5rem; }
-            .text-4xl { font-size: 2rem; }
-            .text-3xl { font-size: 1.75rem; }
         }
     </style>
 </head>
 <body>
 
+    <audio id="kiss-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+
     <div id="app-container">
         <div id="app" class="max-w-md w-full">
-            <!-- Configuration View -->
-            <div id="config-view" class="pixel-card p-6 md:p-8 text-center">
+            <!-- Config View -->
+            <div id="config-view" class="pixel-card p-6 text-center">
                 <h1 class="text-4xl mb-4">Setup Love Link</h1>
                 <p class="mb-4 text-xl">Enter your password here to start</p>
                 <input type="password" id="api-key-input" placeholder="Paste your password here" 
-                    class="w-full border-2 border-black p-3 mb-6 text-center font-sans text-lg outline-none focus:bg-pink-50 rounded-none appearance-none">
+                    class="w-full border-2 border-black p-3 mb-6 text-center font-sans text-lg outline-none focus:bg-pink-50 rounded-none">
                 <button onclick="saveConfig()" class="pixel-btn w-full py-4 text-2xl text-white">Unlock Heart 🔓</button>
             </div>
 
             <!-- Role Selection -->
-            <div id="setup-view" class="hidden pixel-card p-6 md:p-8 text-center">
+            <div id="setup-view" class="hidden pixel-card p-6 text-center">
                 <h1 class="text-4xl mb-6">Who are you?</h1>
                 <button onclick="setRole('hha')" class="pixel-btn w-full py-4 mb-4 text-2xl text-white">I am HHA</button>
                 <button onclick="setRole('ppita')" class="pixel-btn w-full py-4 text-2xl text-white bg-purple-400">I am Ppita</button>
             </div>
 
-            <!-- Main Interaction View -->
+            <!-- Main View -->
             <div id="main-view" class="hidden">
-                <div class="pixel-card p-5 md:p-6 text-center bg-white">
-                    <div class="flex justify-between items-center mb-6">
+                <div class="pixel-card p-5 text-center bg-white">
+                    <div class="flex justify-between items-center mb-4">
                         <span id="user-tag" class="status-pill font-bold uppercase"></span>
                         <span id="connection-status" class="status-pill bg-yellow-200">...</span>
                     </div>
 
                     <div class="mb-6 floating">
                         <div id="pixel-heart" class="text-8xl mb-2">❤️</div>
-                        <h2 id="greeting" class="text-3xl font-bold leading-tight">Waiting for love...</h2>
+                        <h2 id="greeting" class="text-3xl font-bold">Waiting...</h2>
                     </div>
 
-                    <div id="interaction-area">
-                        <button id="send-kiss-btn" class="pixel-btn w-full py-5 text-3xl text-white mb-4 active:scale-95 transition-transform">
-                            SEND KISS
-                        </button>
-                    </div>
+                    <button id="send-kiss-btn" class="pixel-btn w-full py-5 text-3xl text-white mb-4">SEND KISS</button>
 
-                    <div id="history-box" class="mt-6 border-t-2 border-dashed border-gray-200 pt-4">
-                        <h3 class="text-xl mb-2 text-gray-500 uppercase tracking-widest">Love Log</h3>
-                        <div id="messages" class="text-lg space-y-1 h-40 overflow-y-auto text-left px-3 py-2 font-sans rounded-sm"></div>
+                    <div id="history-box" class="mt-4 border-t-2 border-dashed border-gray-200 pt-4">
+                        <h3 class="text-xl mb-2 text-gray-400 uppercase">Love Log</h3>
+                        <div id="messages" class="text-lg space-y-1 h-32 overflow-y-auto text-left px-3 font-sans"></div>
                     </div>
                 </div>
             </div>
@@ -162,12 +133,24 @@
             const savedKey = localStorage.getItem('ably_kiss_key');
             const savedRole = localStorage.getItem('kiss_app_role');
             
+            // ROLE LOCKING: If a user has a saved role, they can't access the other's page
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlUser = urlParams.get('user');
+
             if (savedKey) {
                 document.getElementById('config-view').classList.add('hidden');
+                
                 if (savedRole) {
+                    // Redirect if they try to enter as the other person
+                    if (urlUser && urlUser !== savedRole) {
+                        window.location.href = window.location.pathname + `?user=${savedRole}`;
+                        return;
+                    }
                     initApp(savedRole);
+                } else if (urlUser) {
+                    setRole(urlUser);
                 } else {
-                    checkUrlParams();
+                    document.getElementById('setup-view').classList.remove('hidden');
                 }
             }
         };
@@ -180,16 +163,6 @@
             }
         }
 
-        function checkUrlParams() {
-            const params = new URLSearchParams(window.location.search);
-            const user = params.get('user');
-            if (user === 'hha' || user === 'ppita') {
-                setRole(user);
-            } else {
-                document.getElementById('setup-view').classList.remove('hidden');
-            }
-        }
-
         function setRole(role) {
             localStorage.setItem('kiss_app_role', role);
             initApp(role);
@@ -198,12 +171,6 @@
         function initApp(role) {
             userId = role;
             partnerId = (userId === 'hha') ? 'ppita' : 'hha';
-
-            // Clean URL for sharing
-            if (history.pushState) {
-                const newurl = window.location.protocol + "//" + window.location.host + window.location.pathname + `?user=${userId}`;
-                window.history.pushState({path:newurl},'',newurl);
-            }
 
             document.getElementById('setup-view').classList.add('hidden');
             document.getElementById('main-view').classList.remove('hidden');
@@ -216,10 +183,8 @@
             channel = ably.channels.get('kiss-day-channel');
 
             ably.connection.on('connected', () => {
-                const status = document.getElementById('connection-status');
-                status.innerText = "Online";
-                status.classList.remove('bg-yellow-200');
-                status.classList.add('bg-green-200');
+                document.getElementById('connection-status').innerText = "Online";
+                document.getElementById('connection-status').className = "status-pill bg-green-200";
             });
 
             channel.subscribe('kiss', (message) => {
@@ -228,51 +193,53 @@
                 }
             });
 
+            // Browser audio unlock
+            const unlock = () => { document.getElementById('kiss-sound').play().then(p => { document.getElementById('kiss-sound').pause(); }); document.removeEventListener('click', unlock); };
+            document.addEventListener('click', unlock);
+
             if ("Notification" in window) Notification.requestPermission();
         }
 
         function updateButtonText(state) {
             const btn = document.getElementById('send-kiss-btn');
-            const targetName = (userId === 'hha') ? 'Her' : 'Him';
+            const target = (userId === 'hha') ? 'ppita' : 'hha';
             
-            if (state === 'initial') {
-                btn.innerText = `KISS ${targetName.toUpperCase()} 💋`;
-            } else if (state === 'received') {
-                btn.innerText = `KISS ${targetName.toUpperCase()} BACK! 💖`;
-            } else if (state === 'sent_again') {
-                btn.innerText = `KISS ${targetName.toUpperCase()} AGAIN 💋`;
-            }
+            if (state === 'initial') btn.innerText = `KISS ${target.toUpperCase()}`;
+            else if (state === 'received') btn.innerText = `KISS ${target.toUpperCase()} BACK!`;
+            else if (state === 'again') btn.innerText = `KISS ${target.toUpperCase()} AGAIN`;
         }
 
         document.getElementById('send-kiss-btn').onclick = () => {
             if (!channel) return;
-            const data = { from: userId, to: partnerId, time: Date.now() };
+            const data = { from: userId, to: partnerId, id: Date.now() };
             channel.publish('kiss', data);
             spawnKissEffect();
             addLog(`You sent a kiss!`);
-            updateButtonText('sent_again');
+            updateButtonText('again');
         };
 
         function handleIncomingKiss(data) {
-            if ("vibrate" in navigator) {
-                navigator.vibrate([200, 100, 200, 100, 400]);
-            }
+            const audio = document.getElementById('kiss-sound');
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+
+            if ("vibrate" in navigator) navigator.vibrate([200, 100, 200]);
 
             document.getElementById('pixel-heart').innerText = "😘";
             document.getElementById('greeting').innerText = `${data.from} kissed you!`;
             updateButtonText('received');
-            addLog(`${data.from} sent a kissy! 💖`);
+            addLog(`${data.from} sent a kiss! 💖`);
 
-            if (Notification.permission === "granted") {
-                new Notification("New Kiss Received! 💋", {
-                    body: `${data.from} sent you a kiss! Click to kiss back.`,
-                    icon: "https://img.icons8.com/pixel-styled/96/filled-like.png"
+            if ("Notification" in window && Notification.permission === "granted") {
+                // Using unique tags/timestamps allows multiple notifications to stack
+                new Notification(`💋 Kiss from ${data.from}`, {
+                    body: "Tap to kiss back immediately!",
+                    icon: "https://img.icons8.com/pixel-styled/96/filled-like.png",
+                    tag: 'kiss-' + Date.now() 
                 });
             }
 
-            setTimeout(() => {
-                document.getElementById('pixel-heart').innerText = "❤️";
-            }, 3000);
+            setTimeout(() => { document.getElementById('pixel-heart').innerText = "❤️"; }, 3000);
         }
 
         function spawnKissEffect() {
@@ -280,7 +247,7 @@
             kiss.className = 'kiss-animation';
             kiss.innerText = '💋';
             kiss.style.left = Math.random() * 60 + 20 + '%';
-            kiss.style.top = '50%';
+            kiss.style.top = '40%';
             document.body.appendChild(kiss);
             setTimeout(() => kiss.remove(), 1500);
         }
@@ -288,12 +255,10 @@
         function addLog(msg) {
             const box = document.getElementById('messages');
             const div = document.createElement('div');
-            div.className = "border-b border-pink-100 py-2 text-xs text-gray-600";
-            
+            div.className = "border-b border-pink-100 py-1 text-xs text-gray-500";
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
             const timeStr = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            
             div.innerText = `[${dateStr} ${timeStr}] ${msg}`;
             box.prepend(div);
         }
