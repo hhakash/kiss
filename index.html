@@ -83,7 +83,8 @@
     <div id="app" class="max-w-md w-full">
         <div id="loading" class="pixel-card p-8 text-center">
             <h1 class="text-4xl mb-4">Loading Love...</h1>
-            <div class="text-2xl animate-pulse">💋💋💋</div>
+            <div id="loading-heart" class="text-2xl animate-pulse">💋💋💋</div>
+            <p id="error-display" class="text-red-500 mt-4 hidden"></p>
         </div>
 
         <div id="setup-view" class="hidden pixel-card p-8 text-center">
@@ -140,30 +141,41 @@
 
         async function init() {
             try {
+                // RULE 3: Auth Before Queries - await the sign in
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
+                    currentUser = (await signInWithCustomToken(auth, __initial_auth_token)).user;
                 } else {
-                    await signInAnonymously(auth);
+                    currentUser = (await signInAnonymously(auth)).user;
                 }
+                
+                // Once auth is successful, handle the UI view
+                if (userParam === 'hha' || userParam === 'ppita') {
+                    setupApp(userParam);
+                } else {
+                    showSetupScreen();
+                }
+
             } catch (err) {
                 console.error("Auth failed:", err);
+                document.getElementById('error-display').innerText = "Connection error. Please refresh.";
+                document.getElementById('error-display').classList.remove('hidden');
+                document.getElementById('loading-heart').innerText = "💔";
             }
             
+            // Still listen for state changes to be safe
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     currentUser = user;
-                    // If we have a URL param, use it, otherwise show setup
-                    if (userParam === 'hha' || userParam === 'ppita') {
-                        setupApp(userParam);
-                    } else {
-                        document.getElementById('loading').classList.add('hidden');
-                        document.getElementById('setup-view').classList.remove('hidden');
-                    }
                 }
             });
         }
 
-        // FIXED: Removed pushState which caused SecurityError in the preview environment
+        function showSetupScreen() {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('setup-view').classList.remove('hidden');
+            document.getElementById('main-view').classList.add('hidden');
+        }
+
         window.switchUser = (u) => {
             setupApp(u);
         };
@@ -182,13 +194,18 @@
         }
 
         function requestNotificationPermission() {
-            if ("Notification" in window) {
+            if ("Notification" in window && Notification.permission === "default") {
                 Notification.requestPermission();
             }
         }
 
         document.getElementById('send-kiss-btn').onclick = async () => {
-            if (!currentUser) return;
+            if (!currentUser) {
+                addLog("Wait for connection...");
+                return;
+            }
+            
+            // RULE 1: Strict Paths
             const kissRef = collection(db, 'artifacts', appId, 'public', 'data', 'kisses');
             const kissData = {
                 from: userId,
@@ -204,19 +221,24 @@
                 addLog(`You sent a kiss to ${partnerId}!`);
             } catch (e) {
                 console.error("Error sending kiss", e);
+                addLog("Failed to send. Try again?");
             }
         };
 
         function listenForKisses() {
             if (unsubscribe) unsubscribe();
+            
+            // RULE 1: Strict Paths
             const q = collection(db, 'artifacts', appId, 'public', 'data', 'kisses');
             
+            // RULE 2: No Complex Queries - Fetch and filter in memory
             unsubscribe = onSnapshot(q, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     if (change.type === "added") {
                         const data = change.doc.data();
                         const time = data.timestamp?.toMillis() || Date.now();
-                        // Only react to kisses sent in the last 15 seconds
+                        
+                        // Only react to fresh kisses
                         if (Date.now() - time > 15000) return; 
 
                         if (data.to === userId) {
@@ -224,26 +246,25 @@
                         }
                     }
                 });
-            }, (error) => console.error("Firestore error:", error));
+            }, (error) => {
+                console.error("Firestore error:", error);
+                // If it's a permission error, it's often because the user isn't authed yet
+            });
         }
 
         function handleIncomingKiss(data) {
-            // Vibrate phone
             if ("vibrate" in navigator) {
                 navigator.vibrate([300, 100, 300, 100, 500]);
             }
 
-            // Update UI
             document.getElementById('greeting').innerText = `${data.from} sent you a kiss!`;
             document.getElementById('pixel-heart').innerText = "😘";
             addLog(`${data.from} kissed you! 💖`);
 
-            // Notification
             if (document.visibilityState !== 'visible') {
                 showLocalNotification(data.from);
             }
 
-            // Reset UI state
             setTimeout(() => {
                 document.getElementById('greeting').innerText = "Kiss back? ✨";
                 document.getElementById('pixel-heart').innerText = "❤️";
@@ -278,7 +299,8 @@
             setTimeout(() => div.classList.remove('animate-bounce'), 1000);
         }
 
-        init();
+        // Start the app
+        window.onload = init;
     </script>
 </body>
 </html>
