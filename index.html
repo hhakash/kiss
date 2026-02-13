@@ -81,20 +81,17 @@
 <body class="min-h-screen flex items-center justify-center p-4">
 
     <div id="app" class="max-w-md w-full">
-        <!-- Loading State -->
         <div id="loading" class="pixel-card p-8 text-center">
             <h1 class="text-4xl mb-4">Loading Love...</h1>
             <div class="text-2xl animate-pulse">💋💋💋</div>
         </div>
 
-        <!-- Auth/User Selection (Internal Use) -->
         <div id="setup-view" class="hidden pixel-card p-8 text-center">
             <h1 class="text-4xl mb-6">Who are you?</h1>
             <button onclick="switchUser('hha')" class="pixel-btn w-full py-3 mb-4 text-2xl text-white">I am HHA</button>
             <button onclick="switchUser('ppita')" class="pixel-btn w-full py-3 text-2xl text-white bg-purple-400">I am Ppita</button>
         </div>
 
-        <!-- Main Interaction View -->
         <div id="main-view" class="hidden">
             <div class="pixel-card p-6 text-center bg-white">
                 <div class="flex justify-between items-center mb-6">
@@ -116,18 +113,15 @@
 
                 <div id="history-box" class="mt-8 border-t-2 border-dashed border-gray-300 pt-4">
                     <h3 class="text-xl mb-2">Love History</h3>
-                    <div id="messages" class="text-lg space-y-1 h-32 overflow-y-auto">
-                        <!-- History logs go here -->
-                    </div>
+                    <div id="messages" class="text-lg space-y-1 h-32 overflow-y-auto"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Firebase Scripts -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, query, limit, updateDoc, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = JSON.parse(__firebase_config);
@@ -139,23 +133,26 @@
         let currentUser = null;
         let partnerId = '';
         let userId = '';
+        let unsubscribe = null;
 
-        // 1. Logic to detect user from URL
         const urlParams = new URLSearchParams(window.location.search);
-        const userParam = urlParams.get('user'); // ?user=hha or ?user=ppita
+        const userParam = urlParams.get('user');
 
         async function init() {
-            // Register Service Worker for Notifications
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('sw.js').catch(err => console.log(err));
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Auth failed:", err);
             }
-
-            // Auth
-            await signInAnonymously(auth);
             
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     currentUser = user;
+                    // If we have a URL param, use it, otherwise show setup
                     if (userParam === 'hha' || userParam === 'ppita') {
                         setupApp(userParam);
                     } else {
@@ -166,9 +163,8 @@
             });
         }
 
+        // FIXED: Removed pushState which caused SecurityError in the preview environment
         window.switchUser = (u) => {
-            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + `?user=${u}`;
-            window.history.pushState({path:newUrl},'',newUrl);
             setupApp(u);
         };
 
@@ -191,8 +187,8 @@
             }
         }
 
-        // 2. Sending a Kiss
         document.getElementById('send-kiss-btn').onclick = async () => {
+            if (!currentUser) return;
             const kissRef = collection(db, 'artifacts', appId, 'public', 'data', 'kisses');
             const kissData = {
                 from: userId,
@@ -211,53 +207,53 @@
             }
         };
 
-        // 3. Listening for Kisses
         function listenForKisses() {
+            if (unsubscribe) unsubscribe();
             const q = collection(db, 'artifacts', appId, 'public', 'data', 'kisses');
             
-            onSnapshot(q, (snapshot) => {
+            unsubscribe = onSnapshot(q, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     if (change.type === "added") {
                         const data = change.doc.data();
-                        // Prevent reacting to old data or our own messages
                         const time = data.timestamp?.toMillis() || Date.now();
-                        if (Date.now() - time > 10000) return; 
+                        // Only react to kisses sent in the last 15 seconds
+                        if (Date.now() - time > 15000) return; 
 
                         if (data.to === userId) {
                             handleIncomingKiss(data);
                         }
                     }
                 });
-            }, (error) => console.error(error));
+            }, (error) => console.error("Firestore error:", error));
         }
 
         function handleIncomingKiss(data) {
-            // 4. Vibrate phone
+            // Vibrate phone
             if ("vibrate" in navigator) {
-                navigator.vibrate([200, 100, 200]);
+                navigator.vibrate([300, 100, 300, 100, 500]);
             }
 
-            // 5. Update UI
+            // Update UI
             document.getElementById('greeting').innerText = `${data.from} sent you a kiss!`;
             document.getElementById('pixel-heart').innerText = "😘";
-            addLog(`${data.from} kissed you!`);
+            addLog(`${data.from} kissed you! 💖`);
 
-            // 6. Push Notification (if tab is hidden)
+            // Notification
             if (document.visibilityState !== 'visible') {
                 showLocalNotification(data.from);
             }
 
-            // Reset UI after 5 seconds
+            // Reset UI state
             setTimeout(() => {
-                document.getElementById('greeting').innerText = "Send one back?";
+                document.getElementById('greeting').innerText = "Kiss back? ✨";
                 document.getElementById('pixel-heart').innerText = "❤️";
-            }, 5000);
+            }, 6000);
         }
 
         function showLocalNotification(sender) {
             if (Notification.permission === "granted") {
-                new Notification("New Kiss! 💋", {
-                    body: `${sender} sent you a kissy! Click to return it.`,
+                new Notification("💋 Kiss Received!", {
+                    body: `${sender} just kissed you! Open to kiss back.`,
                     icon: "https://img.icons8.com/pixel-styled/96/filled-like.png"
                 });
             }
@@ -276,26 +272,13 @@
         function addLog(msg) {
             const box = document.getElementById('messages');
             const div = document.createElement('div');
-            div.className = "border-b border-pink-100 py-1";
+            div.className = "border-b border-pink-100 py-2 animate-bounce";
             div.innerText = `> ${msg}`;
             box.prepend(div);
+            setTimeout(() => div.classList.remove('animate-bounce'), 1000);
         }
 
         init();
-    </script>
-
-    <script>
-        // Inline Service Worker Simulation for GitHub Pages Environment
-        // In a real production environment, this would be a separate sw.js file
-        const swContent = `
-            self.addEventListener('push', (event) => {
-                const data = event.data.json();
-                self.registration.showNotification(data.title, {
-                    body: data.body,
-                    icon: 'https://img.icons8.com/pixel-styled/96/filled-like.png'
-                });
-            });
-        `;
     </script>
 </body>
 </html>
